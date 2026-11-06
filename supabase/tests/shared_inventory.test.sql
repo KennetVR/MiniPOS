@@ -1,0 +1,37 @@
+begin;
+select plan(31);
+
+select has_table('public', 'profiles', 'auth identities map to application roles');
+select has_table('public', 'producto', 'shared product table exists');
+select ok((select relrowsecurity from pg_class where oid='public.producto'::regclass), 'product table enforces row level security');
+select has_function('public', 'create_inventory_receipt', array['bigint','text','jsonb'], 'receipt RPC contract exists');
+select has_function('public', 'create_sale', array['jsonb','text','numeric'], 'sale RPC contract exists');
+select has_function('public', 'adjust_inventory', array['bigint','integer','text'], 'adjustment RPC contract exists');
+select ok((select prosecdef from pg_proc where oid='public.create_sale(jsonb,text,numeric)'::regprocedure), 'sale RPC executes with controlled privileges');
+select ok(not has_table_privilege('authenticated','public.producto','UPDATE'), 'authenticated clients cannot directly update stock');
+select ok(not has_column_privilege('authenticated','public.producto','stock','UPDATE'), 'authenticated clients cannot update stock through column grants');
+select ok((select prosecdef from pg_proc where oid='public.create_inventory_receipt(bigint,text,jsonb)'::regprocedure), 'receipt RPC uses controlled privileges');
+select ok((select prosecdef from pg_proc where oid='public.adjust_inventory(bigint,integer,text)'::regprocedure), 'adjustment RPC uses controlled privileges');
+select has_column('public','producto','precio_compra','shared product keeps purchase price');
+select has_column('public','producto','stock_minimo','shared product keeps minimum stock');
+select has_column('public','producto','estado','desktop-facing product status remains available');
+select has_column('public','venta','numero_boleta','sales expose receipt number');
+select has_column('public','venta','igv','sales preserve tax total');
+select has_column('public','detalle_venta','subtotal','sale details preserve line subtotal');
+select has_table('public','ingreso','sales can record their income transactionally');
+select has_table('public','egreso','expenses remain available to the desktop workflow');
+select has_table('public','configuracion','settings remain available to both clients');
+select ok((select relrowsecurity from pg_class where oid='public.ingreso'::regclass), 'income table enforces row-level security');
+select ok((select relrowsecurity from pg_class where oid='public.egreso'::regclass), 'expense table enforces row-level security');
+select has_sequence('public','venta_numero_boleta_seq','sale receipt numbers use a concurrency-safe sequence');
+select has_function('public','create_expense',array['date','text','text','numeric','text','text','bigint'],'expense creation derives its actor in the database');
+select ok((select prosecdef from pg_proc where oid='public.create_expense(date,text,text,numeric,text,text,bigint)'::regprocedure), 'expense RPC uses controlled privileges');
+select has_column('public','profiles','estado','inactive profiles lose the application role');
+select has_function('public','handle_new_auth_user',array[]::text[],'invited auth users receive a default profile');
+select has_function('public','create_product',array['bigint','text','text','text','numeric','numeric','integer','bigint','integer'],'product creation keeps initial stock inside a server operation');
+select ok((select prosecdef from pg_proc where oid='public.create_product(bigint,text,text,text,numeric,numeric,integer,bigint,integer)'::regprocedure), 'product creation RPC uses controlled privileges');
+select has_function('public','void_sale',array['bigint','text'],'sale voiding restores stock inside a server operation');
+select ok((select prosecdef from pg_proc where oid='public.void_sale(bigint,text)'::regprocedure), 'sale voiding RPC uses controlled privileges');
+
+select * from finish();
+rollback;
