@@ -7,6 +7,9 @@ import {
   registerAuthHandlers,
   registerCategoriaHandlers,
   registerProductoHandlers,
+  registerVentaHandlers,
+  registerReporteHandlers,
+  registerImpresionHandlers,
   registerConfiguracionHandlers
 } from './ipc'
 
@@ -67,6 +70,9 @@ app.whenReady().then(() => {
   registerAuthHandlers()
   registerCategoriaHandlers()
   registerProductoHandlers()
+  registerVentaHandlers()
+  registerReporteHandlers()
+  registerImpresionHandlers()
   registerConfiguracionHandlers()
   console.log('Handlers IPC registrados')
   
