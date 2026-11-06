@@ -1,10 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react'
 
-import { createMobileApi } from '../lib/api'
+import { mobileApi } from '../lib/api'
 import { bindSupabaseAutoRefresh, isSupabaseConfigured, supabase } from '../lib/supabase'
 import type { UserSession } from '../lib/types'
-
-const api = createMobileApi(supabase)
 
 interface AuthContextValue {
   user: UserSession | null
@@ -25,7 +23,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null)
 
   const refresh = async () => {
-    const result = await api.auth.current()
+    const result = await mobileApi.auth.current()
     if (result.success) setUser(result.data)
     else setError(result.error)
     setLoading(false)
@@ -34,7 +32,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let mounted = true
     const stopAutoRefresh = bindSupabaseAutoRefresh()
-    void api.auth.current().then((result) => {
+    void mobileApi.auth.current().then((result) => {
       if (!mounted) return
       if (result.success) setUser(result.data)
       else setError(result.error)
@@ -47,7 +45,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setUser(null)
         return
       }
-      void api.auth.current().then((result) => {
+      void mobileApi.auth.current().then((result) => {
         if (!mounted) return
         if (result.success) setUser(result.data)
         else setError(result.error)
@@ -69,7 +67,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     signIn: async (email, password) => {
       setLoading(true)
       setError(null)
-      const result = await api.auth.login(email, password)
+      const result = await mobileApi.auth.login(email, password)
       if (result.success) {
         setUser(result.data)
         setLoading(false)
@@ -80,7 +78,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return false
     },
     signOut: async () => {
-      await api.auth.logout()
+      await mobileApi.auth.logout()
       setUser(null)
       setError(null)
     },

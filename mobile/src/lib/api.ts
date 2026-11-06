@@ -13,6 +13,7 @@ import type {
   UserProfile,
   UserSession
 } from './types'
+import { supabase } from './supabase'
 
 type Row = Record<string, unknown>
 type SupabaseError = { message?: string } | null
@@ -347,3 +348,5 @@ export function createMobileApi(client: SupabaseClient | null) {
 
   return { auth, products, categories, inventory, sales, users, settings, dashboard }
 }
+
+export const mobileApi = createMobileApi(supabase)
