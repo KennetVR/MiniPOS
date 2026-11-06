@@ -5,6 +5,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   name: 'MiniPOS Mobile',
   slug: 'minipos-mobile',
   version: '1.0.0',
+  platforms: ['ios', 'android'],
   orientation: 'portrait',
   scheme: 'minipos',
   userInterfaceStyle: 'automatic',
