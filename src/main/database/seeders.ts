@@ -1,5 +1,4 @@
 import type { Database } from 'better-sqlite3'
-import bcrypt from 'bcryptjs'
 
 export function runSeeders(db: Database): void {
   const categoriaCount = db.prepare('SELECT COUNT(*) as count FROM categoria').get() as { count: number }
@@ -22,16 +21,6 @@ export function runSeeders(db: Database): void {
     })
     insertMany(categorias)
     console.log('Categorías creadas')
-  }
-
-  const usuarioCount = db.prepare('SELECT COUNT(*) as count FROM usuario').get() as { count: number }
-  if (usuarioCount.count === 0) {
-    const hashedPassword = bcrypt.hashSync('admin123', 10)
-    const hashedVendedor = bcrypt.hashSync('vendedor123', 10)
-    
-    db.prepare('INSERT INTO usuario (username, password, nombre, rol) VALUES (?, ?, ?, ?)').run('admin', hashedPassword, 'Administrador', 'administrador')
-    db.prepare('INSERT INTO usuario (username, password, nombre, rol) VALUES (?, ?, ?, ?)').run('vendedor', hashedVendedor, 'Vendedor', 'vendedor')
-    console.log('Usuarios creados')
   }
 
   const configCount = db.prepare('SELECT COUNT(*) as count FROM configuracion').get() as { count: number }

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import bcrypt from 'bcryptjs'
 import { getDb } from '../database'
 
@@ -11,8 +11,25 @@ interface Usuario {
   estado: number
 }
 
+type Session = { userId: number; role: string }
+
+const sessions = new Map<number, Session>()
+
+function hasAdminSession(event: IpcMainInvokeEvent): boolean {
+  return sessions.get(event.sender.id)?.role === 'administrador'
+}
+
+function hasUserSession(event: IpcMainInvokeEvent, userId: number): boolean {
+  const session = sessions.get(event.sender.id)
+  return session?.userId === userId || session?.role === 'administrador'
+}
+
+function unauthorized() {
+  return { success: false, error: 'No autorizado' }
+}
+
 export function registerAuthHandlers(): void {
-  ipcMain.handle('auth:login', async (_, username: string, password: string) => {
+  ipcMain.handle('auth:login', async (event, username: string, password: string) => {
     try {
       const db = getDb()
       const user = db.prepare(`
@@ -30,6 +47,8 @@ export function registerAuthHandlers(): void {
         return { success: false, error: 'Contraseña incorrecta' }
       }
 
+      sessions.set(event.sender.id, { userId: user.id_usuario, role: user.rol })
+
       return {
         success: true,
         data: {
@@ -44,8 +63,11 @@ export function registerAuthHandlers(): void {
     }
   })
 
-  ipcMain.handle('auth:verifySession', async (_, userId: number) => {
+  ipcMain.handle('auth:verifySession', async (event, userId: number) => {
     try {
+      if (!hasUserSession(event, userId)) {
+        return { success: true, data: null }
+      }
       const db = getDb()
       const user = db.prepare(`
         SELECT id_usuario, username, nombre, rol 
@@ -59,8 +81,11 @@ export function registerAuthHandlers(): void {
     }
   })
 
-  ipcMain.handle('auth:changePassword', async (_, userId: number, oldPassword: string, newPassword: string) => {
+  ipcMain.handle('auth:changePassword', async (event, userId: number, oldPassword: string, newPassword: string) => {
     try {
+      if (!hasUserSession(event, userId)) {
+        return unauthorized()
+      }
       const db = getDb()
       const user = db.prepare('SELECT password FROM usuario WHERE id_usuario = ?').get(userId) as Usuario | undefined
 
@@ -83,8 +108,9 @@ export function registerAuthHandlers(): void {
     }
   })
 
-  ipcMain.handle('usuario:getAll', async () => {
+  ipcMain.handle('usuario:getAll', async (event) => {
     try {
+      if (!hasAdminSession(event)) return unauthorized()
       const db = getDb()
       const usuarios = db.prepare(`
         SELECT id_usuario, username, nombre, rol, estado, created_at
@@ -97,8 +123,9 @@ export function registerAuthHandlers(): void {
     }
   })
 
-  ipcMain.handle('usuario:create', async (_, data: { username: string; password: string; nombre: string; rol: string }) => {
+  ipcMain.handle('usuario:create', async (event, data: { username: string; password: string; nombre: string; rol: string }) => {
     try {
+      if (!hasAdminSession(event)) return unauthorized()
       const db = getDb()
       const hashedPassword = bcrypt.hashSync(data.password, 10)
       
@@ -113,8 +140,9 @@ export function registerAuthHandlers(): void {
     }
   })
 
-  ipcMain.handle('usuario:update', async (_, id: number, data: { nombre: string; rol: string; password?: string }) => {
+  ipcMain.handle('usuario:update', async (event, id: number, data: { nombre: string; rol: string; password?: string }) => {
     try {
+      if (!hasAdminSession(event)) return unauthorized()
       const db = getDb()
       
       if (data.password) {
@@ -136,8 +164,9 @@ export function registerAuthHandlers(): void {
     }
   })
 
-  ipcMain.handle('usuario:toggleEstado', async (_, id: number) => {
+  ipcMain.handle('usuario:toggleEstado', async (event, id: number) => {
     try {
+      if (!hasAdminSession(event)) return unauthorized()
       const db = getDb()
       db.prepare(`
         UPDATE usuario SET estado = CASE WHEN estado = 1 THEN 0 ELSE 1 END, updated_at = CURRENT_TIMESTAMP

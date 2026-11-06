@@ -1,7 +1,4 @@
 export { registerAuthHandlers } from './auth'
 export { registerCategoriaHandlers } from './categoria'
 export { registerProductoHandlers } from './producto'
-export { registerVentaHandlers } from './venta'
-export { registerReporteHandlers } from './reporte'
-export { registerImpresionHandlers } from './impresion'
 export { registerConfiguracionHandlers } from './configuracion'
