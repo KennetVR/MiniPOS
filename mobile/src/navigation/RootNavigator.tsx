@@ -12,7 +12,9 @@ import { PosScreen } from '../screens/PosScreen'
 import { MoreScreen } from '../screens/MoreScreen'
 import { InventoryReceiptScreen } from '../screens/InventoryReceiptScreen'
 import { ProductFormScreen } from '../screens/ProductFormScreen'
-import { PlaceholderScreen } from '../screens/PlaceholderScreen'
+import { CategoriesScreen } from '../screens/CategoriesScreen'
+import { UsersScreen } from '../screens/UsersScreen'
+import { SettingsScreen } from '../screens/SettingsScreen'
 import type { MainTabParamList, RootStackParamList } from './types'
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
@@ -45,9 +47,9 @@ export function RootNavigator() {
           <Stack.Screen name="Main" component={MainTabs} />
           <Stack.Screen name="InventoryReceipt" component={InventoryReceiptScreen} options={{ headerShown: true, title: 'Ingreso de inventario' }} />
           <Stack.Screen name="ProductForm" component={ProductFormScreen} options={{ headerShown: true, title: 'Nuevo producto' }} />
-          <Stack.Screen name="Categories" component={PlaceholderScreen} options={{ headerShown: true, title: 'Categorías' }} />
-          <Stack.Screen name="Users" component={PlaceholderScreen} options={{ headerShown: true, title: 'Usuarios' }} />
-          <Stack.Screen name="Settings" component={PlaceholderScreen} options={{ headerShown: true, title: 'Configuración' }} />
+          <Stack.Screen name="Categories" component={CategoriesScreen} options={{ headerShown: true, title: 'Categorías' }} />
+          <Stack.Screen name="Users" component={UsersScreen} options={{ headerShown: true, title: 'Usuarios' }} />
+          <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Configuración' }} />
         </> : <Stack.Screen name="Login" component={LoginScreen} />}
       </Stack.Navigator>
     </NavigationContainer>
