@@ -31,15 +31,16 @@ export function LoginPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Usuario</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Correo electrónico</label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
-                type="text"
+                type="email"
+                autoComplete="email"
                 value={username}
                 onChange={(e) => { setUsername(e.target.value); clearError() }}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Ingrese su usuario"
+                placeholder="usuario@ejemplo.com"
                 required
                 autoFocus
               />
@@ -80,9 +81,6 @@ export function LoginPage() {
           </button>
         </form>
 
-        <div className="bg-gray-50 px-8 py-4 text-center text-sm text-gray-500">
-          <p>Demo: admin / admin123</p>
-        </div>
       </div>
     </div>
   )

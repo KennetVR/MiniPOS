@@ -231,9 +231,8 @@ CREATE TABLE usuario (
     CONSTRAINT chk_rol CHECK (rol IN ('administrador', 'vendedor'))
 );
 
-INSERT INTO usuario (username, password, nombre, rol) VALUES
-    ('admin', 'admin123', 'Administrador', 'administrador'),
-    ('vendedor', 'vendedor123', 'Vendedor', 'vendedor');
+-- No se insertan credenciales por defecto. La autenticación vigente usa
+-- Supabase Auth y perfiles administrados mediante invitaciones confiables.
 ```
 
 ### 2.4 Tabla: producto
