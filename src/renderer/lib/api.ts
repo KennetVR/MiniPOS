@@ -1,6 +1,9 @@
 import type { ApiType } from '../../preload/index'
 import { supabaseClient } from './supabase-client'
 import { createSupabaseApi } from './supabase-api'
+import { syncManager, type SyncStats } from './sync-manager'
+
+export type { SyncStats }
 
 declare global {
   interface Window {
@@ -37,17 +40,49 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<ApiRespon
 
 const supabaseApi = createSupabaseApi(supabaseClient)
 
+// Inicializar el orquestador de sincronización en segundo plano
+if (typeof window !== 'undefined') {
+  syncManager.init(supabaseClient)
+}
+
 export const api = {
   auth: supabaseApi.auth,
   usuario: supabaseApi.usuario,
   categoria: supabaseApi.categoria,
   producto: supabaseApi.producto,
-  venta: supabaseApi.venta,
+  venta: {
+    ...supabaseApi.venta,
+    crear: async (data: CrearVentaData) => {
+      // Local-First: Persistir inmediatamente en SQLite local (<20ms)
+      const localResult = await invoke<{ id_venta: number; numero_boleta: string; total: number; client_tx_id: string }>('venta:crear', data)
+      if (localResult.success) {
+        // Disparar sincronización asíncrona hacia Supabase sin bloquear la UI
+        void syncManager.triggerSync()
+      }
+      return localResult
+    }
+  },
   reporte: supabaseApi.reporte,
   impresion: {
     printTicket: (data: BoletaData) => invoke<void>('impresion:printTicket', data),
-    getBoleta: supabaseApi.impresion.getBoleta,
+    getBoleta: async (id: number) => {
+      // Intentar cargar boleta local primero para impresión instantánea y offline
+      try {
+        const localBoleta = await invoke<BoletaData>('impresion:getBoleta', id)
+        if (localBoleta.success && localBoleta.data) {
+          return localBoleta
+        }
+      } catch {
+        // Fallback a Supabase si no está en SQLite local
+      }
+      return supabaseApi.impresion.getBoleta(id)
+    },
     getPrinters: () => invoke<Printer[]>('impresion:getPrinters')
+  },
+  sync: {
+    getStats: () => syncManager.getStats(),
+    triggerSync: () => syncManager.triggerSync(),
+    onStatsChange: (cb: (stats: SyncStats) => void) => syncManager.onStatsChange(cb)
   },
   configuracion: {
     ...supabaseApi.configuracion

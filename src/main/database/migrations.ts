@@ -170,9 +170,59 @@ export function runMigrations(db: Database): void {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS sync_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_tx_id TEXT UNIQUE NOT NULL,
+      action VARCHAR(50) NOT NULL DEFAULT 'create_sale',
+      payload TEXT NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      synced_at DATETIME
+    );
+
     CREATE INDEX IF NOT EXISTS idx_producto_codigo ON producto(codigo_barras);
     CREATE INDEX IF NOT EXISTS idx_producto_nombre ON producto(nombre);
     CREATE INDEX IF NOT EXISTS idx_venta_fecha ON venta(created_at);
     CREATE INDEX IF NOT EXISTS idx_venta_numero ON venta(numero_boleta);
+    CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
   `)
+
+  try {
+    const ventaCols = db.prepare("PRAGMA table_info(venta)").all() as Array<{ name: string }>
+    const ventaColNames = new Set(ventaCols.map(c => c.name))
+    if (!ventaColNames.has('client_tx_id')) {
+      db.exec('ALTER TABLE venta ADD COLUMN client_tx_id TEXT')
+    }
+    if (!ventaColNames.has('sync_status')) {
+      db.exec("ALTER TABLE venta ADD COLUMN sync_status TEXT DEFAULT 'pending'")
+    }
+    if (!ventaColNames.has('id_usuario_auth')) {
+      db.exec('ALTER TABLE venta ADD COLUMN id_usuario_auth TEXT')
+    }
+  } catch (err) {
+    console.error('Error actualizando columnas de venta en SQLite:', err)
+  }
+
+  try {
+    const usuarioCols = db.prepare("PRAGMA table_info(usuario)").all() as Array<{ name: string }>
+    if (usuarioCols.length > 0) {
+      db.prepare(`
+        INSERT OR IGNORE INTO usuario (id_usuario, username, password, nombre, rol, estado)
+        VALUES (1, 'cajero_local', '', 'Cajero Local POS', 'vendedor', 1)
+      `).run()
+    }
+  } catch (err) {
+    console.error('Error asegurando usuario base en SQLite:', err)
+  }
+
+  try {
+    db.prepare(`
+      INSERT OR IGNORE INTO configuracion (clave, valor, descripcion)
+      VALUES ('impresora_tickets', '', 'Nombre de la impresora térmica de tickets')
+    `).run()
+  } catch (err) {
+    console.error('Error insertando configuración de impresora:', err)
+  }
 }

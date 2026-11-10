@@ -1,4 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
+import { getDb } from '../database'
+
 type TicketData = {
   venta: any
   detalles: any[]
@@ -27,10 +29,13 @@ export function registerImpresionHandlers(): void {
 
       await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
       
+      const printerName = data.config?.impresora_tickets?.trim() || ''
+      const isSilent = Boolean(printerName)
+
       printWin.webContents.print({
-        silent: false,
+        silent: isSilent,
         printBackground: true,
-        deviceName: ''
+        deviceName: printerName
       }, (success, error) => {
         printWin.close()
         if (!success) {
@@ -39,6 +44,46 @@ export function registerImpresionHandlers(): void {
       })
 
       return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('impresion:getBoleta', async (_, idVenta: number) => {
+    try {
+      const db = getDb()
+      const venta = db.prepare(`
+        SELECT v.*, coalesce(u.nombre, 'Cajero') as usuario_nombre
+        FROM venta v
+        LEFT JOIN usuario u ON v.id_usuario = u.id_usuario
+        WHERE v.id_venta = ?
+      `).get(idVenta) as any
+
+      if (!venta) {
+        return { success: false, error: 'Venta no encontrada en base local' }
+      }
+
+      const detalles = db.prepare(`
+        SELECT d.*, coalesce(p.nombre, 'Producto ' || d.id_producto) as producto_nombre
+        FROM detalle_venta d
+        LEFT JOIN producto p ON d.id_producto = p.id_producto
+        WHERE d.id_venta = ?
+      `).all(idVenta) as any[]
+
+      const configs = db.prepare('SELECT clave, valor FROM configuracion').all() as Array<{ clave: string; valor: string }>
+      const configMap: Record<string, string> = {}
+      configs.forEach((c) => {
+        configMap[c.clave] = c.valor || ''
+      })
+
+      return {
+        success: true,
+        data: {
+          venta,
+          detalles,
+          config: configMap
+        }
+      }
     } catch (error) {
       return { success: false, error: String(error) }
     }

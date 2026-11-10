@@ -1,16 +1,29 @@
 import { useState, useEffect } from 'react'
-import { Save, Building, FileText, Percent, DollarSign } from 'lucide-react'
+import { Save, Building, FileText, Percent, DollarSign, Printer } from 'lucide-react'
 import { api, Configuracion } from '../lib/api'
 
 export function ConfiguracionPage() {
   const [config, setConfig] = useState<Record<string, string>>({})
+  const [printers, setPrinters] = useState<Array<{ name: string; displayName?: string; isDefault?: boolean }>>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     loadConfig()
+    loadPrinters()
   }, [])
+
+  const loadPrinters = async () => {
+    try {
+      const res = await api.impresion.getPrinters()
+      if (res.success && res.data) {
+        setPrinters(res.data)
+      }
+    } catch (err) {
+      console.error('Error cargando impresoras:', err)
+    }
+  }
 
   const loadConfig = async () => {
     setLoading(true)
@@ -221,6 +234,36 @@ export function ConfiguracionPage() {
                 min={0}
                 max={4}
               />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Printer className="text-blue-600" size={24} />
+            <h2 className="text-lg font-semibold">Impresora de Tickets (Térmica)</h2>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Impresora Seleccionada</label>
+              <select
+                value={config.impresora_tickets || ''}
+                onChange={(e) => handleChange('impresora_tickets', e.target.value)}
+                className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="">(Ninguna - Usar diálogo de impresión del sistema)</option>
+                {printers.map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.displayName || p.name} {p.isDefault ? '(Predeterminada de Windows)' : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-gray-500">
+                {config.impresora_tickets
+                  ? '✓ Impresión directa silenciosa activa: los tickets se imprimirán automáticamente sin abrir diálogo de confirmación.'
+                  : 'ℹ Sin impresora fija: al imprimir se abrirá el cuadro de diálogo estándar de Windows.'}
+              </p>
             </div>
           </div>
         </div>

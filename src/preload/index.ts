@@ -43,7 +43,12 @@ const allowedChannels = new Set([
   'configuracion:updateMultiple',
   'egreso:getAll',
   'egreso:create',
-  'ingreso:getAll'
+  'ingreso:getAll',
+  'sync:getPending',
+  'sync:markSynced',
+  'sync:markFailed',
+  'sync:getStats',
+  'sync:pullCatalog'
 ])
 
 // Define la API que se expondrá a la ventana

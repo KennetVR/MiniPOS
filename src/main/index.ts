@@ -10,7 +10,8 @@ import {
   registerVentaHandlers,
   registerReporteHandlers,
   registerImpresionHandlers,
-  registerConfiguracionHandlers
+  registerConfiguracionHandlers,
+  registerSyncHandlers
 } from './ipc'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -74,6 +75,7 @@ app.whenReady().then(() => {
   registerReporteHandlers()
   registerImpresionHandlers()
   registerConfiguracionHandlers()
+  registerSyncHandlers()
   console.log('Handlers IPC registrados')
   
   try {
