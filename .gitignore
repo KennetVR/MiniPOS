@@ -8,3 +8,5 @@ release/
 *.log
 mobile/.expo/
 mobile/android/
+
+.vscode/
