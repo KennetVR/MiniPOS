@@ -91,16 +91,11 @@ begin
   return v_id;
 end $$;
 
--- 3-arg overload for backwards compatibility
-create or replace function public.create_sale(
-  p_detalles jsonb,
-  p_forma_pago text,
-  p_descuento numeric
-) returns bigint language sql security definer set search_path = '' as $$
-  select public.create_sale(p_detalles, p_forma_pago, p_descuento, null);
-$$;
+-- Drop the redundant 3-arg overload because p_client_tx_id has a default value (default null),
+-- which causes PostgREST ambiguity (PGRST203: Could not choose the best candidate function).
+drop function if exists public.create_sale(jsonb, text, numeric);
 
 revoke all on function public.create_sale(jsonb,text,numeric,text) from public, anon;
 grant execute on function public.create_sale(jsonb,text,numeric,text) to authenticated;
-grant execute on function public.create_sale(jsonb,text,numeric) to authenticated;
+
 
