@@ -23,6 +23,10 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
 export function bindSupabaseAutoRefresh(): () => void {
   if (!supabase) return () => undefined
 
+  if (AppState.currentState === 'active') {
+    void supabase.auth.startAutoRefresh()
+  }
+
   const subscription = AppState.addEventListener('change', (state) => {
     if (state === 'active') {
       void supabase.auth.startAutoRefresh()
@@ -31,5 +35,8 @@ export function bindSupabaseAutoRefresh(): () => void {
     }
   })
 
-  return () => subscription.remove()
+  return () => {
+    void supabase.auth.stopAutoRefresh()
+    subscription.remove()
+  }
 }

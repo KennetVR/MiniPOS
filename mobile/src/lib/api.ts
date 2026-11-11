@@ -13,10 +13,10 @@ import type {
   UserProfile,
   UserSession
 } from './types'
+import { failureResult, resolveWithSessionRetry, type SupabaseError } from './session-retry'
 import { supabase } from './supabase'
 
 type Row = Record<string, unknown>
-type SupabaseError = { message?: string } | null
 
 const PRODUCT_SELECT = `
   id,
@@ -40,25 +40,7 @@ function unavailable<T>(): ApiResult<T> {
   return { success: false, error: 'Supabase no está configurado' }
 }
 
-function failure<T>(error: unknown, fallback: string): ApiResult<T> {
-  const message = error && typeof error === 'object' && 'message' in error
-    ? String((error as { message?: unknown }).message)
-    : String(error || fallback)
-  return { success: false, error: message || fallback }
-}
-
-async function resolve<T>(
-  result: PromiseLike<{ data: T | null; error: SupabaseError }>,
-  fallback: string
-): Promise<ApiResult<T>> {
-  try {
-    const { data, error } = await result
-    if (error) return failure(error, fallback)
-    return { success: true, data: data as T }
-  } catch (error) {
-    return failure(error, fallback)
-  }
-}
+const failure = failureResult
 
 function asNumber(value: unknown): number {
   const parsed = Number(value ?? 0)
@@ -144,10 +126,15 @@ function todayStart(): string {
 }
 
 export function createMobileApi(client: SupabaseClient | null) {
+  const resolve = <T>(
+    run: () => PromiseLike<{ data: T | null; error: SupabaseError }>,
+    fallback: string
+  ): Promise<ApiResult<T>> => resolveWithSessionRetry(client, run, fallback)
+
   const getProfile = async (userId: string): Promise<ApiResult<UserProfile>> => {
     if (!client) return unavailable()
     const result = await resolve<Row>(
-      client.from('profiles').select('id,username,nombre,role,estado,created_at').eq('id', userId).single<Row>(),
+      () => client.from('profiles').select('id,username,nombre,role,estado,created_at').eq('id', userId).single<Row>(),
       'No se pudo cargar el perfil'
     )
     return result.success ? success(mapProfile(result.data)) : result
@@ -155,6 +142,7 @@ export function createMobileApi(client: SupabaseClient | null) {
 
   const loadSession = async (): Promise<ApiResult<UserSession | null>> => {
     if (!client) return unavailable()
+    await client.auth.getSession()
     const { data, error } = await client.auth.getUser()
     if (error || !data.user) return success(null)
 
@@ -169,7 +157,7 @@ export function createMobileApi(client: SupabaseClient | null) {
   const loadProducts = async (): Promise<ApiResult<Product[]>> => {
     if (!client) return unavailable()
     const result = await resolve<Row[]>(
-      client.from('producto').select(PRODUCT_SELECT).eq('activo', true).order('nombre', { ascending: true }),
+      () => client.from('producto').select(PRODUCT_SELECT).eq('activo', true).order('nombre', { ascending: true }),
       'No se pudieron cargar los productos'
     )
     return result.success ? success((result.data ?? []).map(mapProduct)) : result
@@ -209,14 +197,14 @@ export function createMobileApi(client: SupabaseClient | null) {
     byBarcode: async (barcode: string): Promise<ApiResult<Product | null>> => {
       if (!client) return unavailable()
       const result = await resolve<Row | null>(
-        client.from('producto').select(PRODUCT_SELECT).eq('codigo_barras', barcode.trim()).eq('activo', true).maybeSingle<Row>(),
+        () => client.from('producto').select(PRODUCT_SELECT).eq('codigo_barras', barcode.trim()).eq('activo', true).maybeSingle<Row>(),
         'No se pudo buscar el código de barras'
       )
       return result.success ? success(result.data ? mapProduct(result.data) : null) : result
     },
     create: async (input: NewProductInput): Promise<ApiResult<number>> => {
       if (!client) return unavailable()
-      const result = await resolve<unknown>(client.rpc('create_product', {
+      const result = await resolve<unknown>(() => client.rpc('create_product', {
         p_id_categoria: input.id_categoria,
         p_codigo_barras: input.codigo_barras.trim() || null,
         p_nombre: input.nombre.trim(),
@@ -231,7 +219,7 @@ export function createMobileApi(client: SupabaseClient | null) {
     },
     update: async (id: number, input: Partial<NewProductInput>): Promise<ApiResult<void>> => {
       if (!client) return unavailable()
-      const result = await resolve<void>(client.from('producto').update({
+      const result = await resolve<void>(() => client.from('producto').update({
         id_categoria: input.id_categoria,
         codigo_barras: input.codigo_barras?.trim() || null,
         nombre: input.nombre?.trim(),
@@ -248,22 +236,22 @@ export function createMobileApi(client: SupabaseClient | null) {
   const categories = {
     list: async (): Promise<ApiResult<Category[]>> => {
       if (!client) return unavailable()
-      const result = await resolve<Row[]>(client.from('categoria').select('id,nombre,descripcion,estado').eq('estado', true).order('nombre'), 'No se pudieron cargar las categorías')
+      const result = await resolve<Row[]>(() => client.from('categoria').select('id,nombre,descripcion,estado').eq('estado', true).order('nombre'), 'No se pudieron cargar las categorías')
       return result.success ? success((result.data ?? []).map(mapCategory)) : result
     },
     create: async (nombre: string, descripcion: string): Promise<ApiResult<number>> => {
       if (!client) return unavailable()
-      const result = await resolve<Row>(client.from('categoria').insert({ nombre: nombre.trim(), descripcion: descripcion.trim() || null }).select('id').single<Row>(), 'No se pudo crear la categoría')
+      const result = await resolve<Row>(() => client.from('categoria').insert({ nombre: nombre.trim(), descripcion: descripcion.trim() || null }).select('id').single<Row>(), 'No se pudo crear la categoría')
       return result.success ? success(asNumber(result.data.id)) : result
     },
     update: async (id: number, nombre: string, descripcion: string): Promise<ApiResult<void>> => {
       if (!client) return unavailable()
-      const result = await resolve<void>(client.from('categoria').update({ nombre: nombre.trim(), descripcion: descripcion.trim() || null }).eq('id', id), 'No se pudo actualizar la categoría')
+      const result = await resolve<void>(() => client.from('categoria').update({ nombre: nombre.trim(), descripcion: descripcion.trim() || null }).eq('id', id), 'No se pudo actualizar la categoría')
       return result.success ? success(undefined) : result
     },
     deactivate: async (id: number): Promise<ApiResult<void>> => {
       if (!client) return unavailable()
-      const result = await resolve<void>(client.from('categoria').update({ estado: false }).eq('id', id), 'No se pudo desactivar la categoría')
+      const result = await resolve<void>(() => client.from('categoria').update({ estado: false }).eq('id', id), 'No se pudo desactivar la categoría')
       return result.success ? success(undefined) : result
     }
   }
@@ -271,7 +259,7 @@ export function createMobileApi(client: SupabaseClient | null) {
   const inventory = {
     createReceipt: async (receiptNumber: string, lines: ReceiptLine[], supplierId: number | null = null): Promise<ApiResult<number>> => {
       if (!client) return unavailable()
-      const result = await resolve<unknown>(client.rpc('create_inventory_receipt', {
+      const result = await resolve<unknown>(() => client.rpc('create_inventory_receipt', {
         p_id_proveedor: supplierId,
         p_numero_comprobante: receiptNumber.trim(),
         p_items: lines.map(({ id_producto, cantidad, precio_compra }) => ({ id_producto, cantidad, precio_compra }))
@@ -283,7 +271,7 @@ export function createMobileApi(client: SupabaseClient | null) {
   const sales = {
     create: async (lines: SaleLine[], paymentMethod: string, discount: number): Promise<ApiResult<number>> => {
       if (!client) return unavailable()
-      const result = await resolve<unknown>(client.rpc('create_sale', {
+      const result = await resolve<unknown>(() => client.rpc('create_sale', {
         p_detalles: lines.map(({ id_producto, cantidad, descuento }) => ({ id_producto, cantidad, descuento })),
         p_forma_pago: paymentMethod,
         p_descuento: discount
@@ -295,17 +283,17 @@ export function createMobileApi(client: SupabaseClient | null) {
   const users = {
     list: async (): Promise<ApiResult<UserProfile[]>> => {
       if (!client) return unavailable()
-      const result = await resolve<Row[]>(client.from('profiles').select('id,username,nombre,role,estado,created_at').order('nombre'), 'No se pudieron cargar los usuarios')
+      const result = await resolve<Row[]>(() => client.from('profiles').select('id,username,nombre,role,estado,created_at').order('nombre'), 'No se pudieron cargar los usuarios')
       return result.success ? success((result.data ?? []).map(mapProfile)) : result
     },
     update: async (id: string, nombre: string, rol: UserProfile['rol']): Promise<ApiResult<void>> => {
       if (!client) return unavailable()
-      const result = await resolve<void>(client.from('profiles').update({ nombre: nombre.trim(), role: rol === 'administrador' ? 'administrator' : 'seller' }).eq('id', id), 'No se pudo actualizar el usuario')
+      const result = await resolve<void>(() => client.from('profiles').update({ nombre: nombre.trim(), role: rol === 'administrador' ? 'administrator' : 'seller' }).eq('id', id), 'No se pudo actualizar el usuario')
       return result.success ? success(undefined) : result
     },
     toggleState: async (user: UserProfile): Promise<ApiResult<void>> => {
       if (!client) return unavailable()
-      const result = await resolve<void>(client.from('profiles').update({ estado: !user.estado }).eq('id', user.id_usuario), 'No se pudo cambiar el estado del usuario')
+      const result = await resolve<void>(() => client.from('profiles').update({ estado: !user.estado }).eq('id', user.id_usuario), 'No se pudo cambiar el estado del usuario')
       return result.success ? success(undefined) : result
     }
   }
@@ -313,14 +301,14 @@ export function createMobileApi(client: SupabaseClient | null) {
   const settings = {
     list: async (): Promise<ApiResult<AppSetting[]>> => {
       if (!client) return unavailable()
-      const result = await resolve<Row[]>(client.from('configuracion').select('clave,valor,descripcion').order('clave'), 'No se pudo cargar la configuración')
+      const result = await resolve<Row[]>(() => client.from('configuracion').select('clave,valor,descripcion').order('clave'), 'No se pudo cargar la configuración')
       return result.success
         ? success((result.data ?? []).map((row) => ({ clave: String(row.clave), valor: String(row.valor ?? ''), descripcion: row.descripcion == null ? null : String(row.descripcion) })))
         : result
     },
     update: async (setting: AppSetting): Promise<ApiResult<void>> => {
       if (!client) return unavailable()
-      const result = await resolve<void>(client.from('configuracion').update({ valor: setting.valor, descripcion: setting.descripcion }).eq('clave', setting.clave), 'No se pudo actualizar la configuración')
+      const result = await resolve<void>(() => client.from('configuracion').update({ valor: setting.valor, descripcion: setting.descripcion }).eq('clave', setting.clave), 'No se pudo actualizar la configuración')
       return result.success ? success(undefined) : result
     }
   }
@@ -329,8 +317,8 @@ export function createMobileApi(client: SupabaseClient | null) {
     summary: async (): Promise<ApiResult<DashboardSummary>> => {
       if (!client) return unavailable()
       const [productsResult, salesResult] = await Promise.all([
-        resolve<Row[]>(client.from('producto').select('id,stock,stock_minimo').eq('activo', true), 'No se pudo cargar el inventario'),
-        resolve<Row[]>(client.from('venta').select('id,numero_boleta,fecha,total,estado').gte('fecha', todayStart()).order('fecha', { ascending: false }).limit(10), 'No se pudieron cargar las ventas')
+        resolve<Row[]>(() => client.from('producto').select('id,stock,stock_minimo').eq('activo', true), 'No se pudo cargar el inventario'),
+        resolve<Row[]>(() => client.from('venta').select('id,numero_boleta,fecha,total,estado').gte('fecha', todayStart()).order('fecha', { ascending: false }).limit(10), 'No se pudieron cargar las ventas')
       ])
       if (!productsResult.success) return productsResult
       if (!salesResult.success) return salesResult
